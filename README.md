@@ -38,6 +38,7 @@ Your solution will be scored primarily on how closely it matches the reference. 
 ### Deployed URL
 
 Replace the placeholder below with your live deployed app URL.
+
 [Live Demo - Replace with your deployed URL](https://your-deployed-url.com)
 
 ### Screen Recordings
