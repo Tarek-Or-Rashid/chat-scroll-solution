@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cross_cache/cross_cache.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart'
     hide InMemoryChatController;
@@ -45,6 +46,10 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
   StreamSubscription? _currentStreamSubscription;
   String? _currentStreamId;
 
+  // ── Auto-scroll state ─────────────────────────────────────────────────────
+  /// When true, the list will auto-scroll to the bottom as new tokens arrive.
+  bool _autoScroll = true;
+
   @override
   void initState() {
     super.initState();
@@ -62,10 +67,14 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
     );
 
     _chatSession = _model.startChat();
+
+    // Listen for manual scroll events
+    _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
     _currentStreamSubscription?.cancel();
     _streamManager.dispose();
     _chatController.dispose();
@@ -74,18 +83,48 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
     super.dispose();
   }
 
+  // ── Scroll helpers ────────────────────────────────────────────────────────
+
+  /// Detects whether the user has manually scrolled away from the bottom
+  /// (pause auto-scroll) or returned to the bottom (resume auto-scroll).
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+
+    final pos = _scrollController.position;
+
+    // Consider "at bottom" when within 32 px of maxScrollExtent
+    final atBottom = pos.pixels >= pos.maxScrollExtent - 32;
+
+    if (_autoScroll && !atBottom) {
+      // Scenario 2: user scrolled up → pause
+      setState(() => _autoScroll = false);
+    } else if (!_autoScroll && atBottom) {
+      // Scenario 4: user scrolled back to bottom → resume
+      setState(() => _autoScroll = true);
+    }
+  }
+
+  /// Scrolls to the very bottom of the list.
+  void _scrollToBottom() {
+    if (!_scrollController.hasClients) return;
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 100),
+      curve: Curves.easeOut,
+    );
+  }
+
+  // ── Stop stream ───────────────────────────────────────────────────────────
+
   void _stopCurrentStream() {
     if (_currentStreamSubscription != null && _currentStreamId != null) {
       _currentStreamSubscription!.cancel();
       _currentStreamSubscription = null;
 
-      setState(() {
-        _isStreaming = false;
-      });
+      setState(() => _isStreaming = false);
 
       if (_currentStreamId != null) {
-        _streamManager.errorStream(
-            _currentStreamId!, 'Stream stopped by user');
+        _streamManager.errorStream(_currentStreamId!, 'Stream stopped by user');
         _currentStreamId = null;
       }
     }
@@ -102,14 +141,12 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
       await _streamManager.errorStream(streamId, error);
     }
 
-    if (mounted) {
-      setState(() {
-        _isStreaming = false;
-      });
-    }
+    if (mounted) setState(() => _isStreaming = false);
     _currentStreamSubscription = null;
     _currentStreamId = null;
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -127,81 +164,88 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
                 itemBuilder: itemBuilder,
               );
             },
-            imageMessageBuilder: (
-              context,
-              message,
-              index, {
-              required bool isSentByMe,
-              MessageGroupStatus? groupStatus,
-            }) =>
-                FlyerChatImageMessage(
-              message: message,
-              index: index,
-              showTime: false,
-              showStatus: false,
-            ),
+            imageMessageBuilder:
+                (
+                  context,
+                  message,
+                  index, {
+                  required bool isSentByMe,
+                  MessageGroupStatus? groupStatus,
+                }) => FlyerChatImageMessage(
+                  message: message,
+                  index: index,
+                  showTime: false,
+                  showStatus: false,
+                ),
             composerBuilder: (context) => _Composer(
               isStreaming: _isStreaming,
               onStop: _stopCurrentStream,
             ),
-            textMessageBuilder: (
-              context,
-              message,
-              index, {
-              required bool isSentByMe,
-              MessageGroupStatus? groupStatus,
-            }) =>
-                FlyerChatTextMessage(
-              message: message,
-              index: index,
-              showTime: false,
-              showStatus: false,
-              receivedBackgroundColor: Colors.transparent,
-              padding: message.authorId == _agent.id
-                  ? EdgeInsets.zero
-                  : const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            ),
-            textStreamMessageBuilder: (
-              context,
-              message,
-              index, {
-              required bool isSentByMe,
-              MessageGroupStatus? groupStatus,
-            }) {
-              final streamState = context
-                  .watch<GeminiStreamManager>()
-                  .getState(message.streamId);
-              return FlyerChatTextStreamMessage(
-                message: message,
-                index: index,
-                streamState: streamState,
-                chunkAnimationDuration: _kChunkAnimationDuration,
-                showTime: false,
-                showStatus: false,
-                receivedBackgroundColor: Colors.transparent,
-                padding: message.authorId == _agent.id
-                    ? EdgeInsets.zero
-                    : const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              );
-            },
+            textMessageBuilder:
+                (
+                  context,
+                  message,
+                  index, {
+                  required bool isSentByMe,
+                  MessageGroupStatus? groupStatus,
+                }) => FlyerChatTextMessage(
+                  message: message,
+                  index: index,
+                  showTime: false,
+                  showStatus: false,
+                  receivedBackgroundColor: Colors.transparent,
+                  padding: message.authorId == _agent.id
+                      ? EdgeInsets.zero
+                      : const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                ),
+            textStreamMessageBuilder:
+                (
+                  context,
+                  message,
+                  index, {
+                  required bool isSentByMe,
+                  MessageGroupStatus? groupStatus,
+                }) {
+                  final streamState = context
+                      .watch<GeminiStreamManager>()
+                      .getState(message.streamId);
+                  return FlyerChatTextStreamMessage(
+                    message: message,
+                    index: index,
+                    streamState: streamState,
+                    chunkAnimationDuration: _kChunkAnimationDuration,
+                    showTime: false,
+                    showStatus: false,
+                    receivedBackgroundColor: Colors.transparent,
+                    padding: message.authorId == _agent.id
+                        ? EdgeInsets.zero
+                        : const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                  );
+                },
           ),
           chatController: _chatController,
           crossCache: _crossCache,
           currentUserId: _currentUser.id,
           onAttachmentTap: _handleAttachmentTap,
           onMessageSend: _handleMessageSend,
-          resolveUser: (id) => Future.value(
-            switch (id) {
-              'me' => _currentUser,
-              'agent' => _agent,
-              _ => null,
-            },
-          ),
+          resolveUser: (id) => Future.value(switch (id) {
+            'me' => _currentUser,
+            'agent' => _agent,
+            _ => null,
+          }),
           theme: ChatTheme.fromThemeData(theme),
         ),
       ),
     );
   }
+
+  // ── Message send ──────────────────────────────────────────────────────────
 
   void _handleMessageSend(String text) async {
     await _chatController.insertMessage(
@@ -213,6 +257,12 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
         metadata: isOnlyEmoji(text) ? {'isOnlyEmoji': true} : null,
       ),
     );
+
+    // Scenario 3: always re-enable auto-scroll when user sends a new message
+    setState(() => _autoScroll = true);
+
+    // Jump to bottom so the new message is visible immediately
+    SchedulerBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
     _sendContent(Content.text(text));
   }
@@ -234,6 +284,11 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
     );
 
     final bytes = await _crossCache.get(image.path);
+
+    // Re-enable auto-scroll for new message
+    setState(() => _autoScroll = true);
+    SchedulerBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+
     _sendContent(Content.data('image/jpeg', bytes));
   }
 
@@ -244,9 +299,7 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
 
     var messageInserted = false;
 
-    setState(() {
-      _isStreaming = true;
-    });
+    setState(() => _isStreaming = true);
 
     Future<void> createAndInsertMessage() async {
       if (messageInserted || !mounted) return;
@@ -278,6 +331,13 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
             if (streamMessage == null) return;
 
             _streamManager.addChunk(streamId, textChunk);
+
+            // Scenario 1: auto-scroll to bottom on each new token
+            if (_autoScroll) {
+              SchedulerBinding.instance.addPostFrameCallback((_) {
+                if (_autoScroll && mounted) _scrollToBottom();
+              });
+            }
           }
         },
         onDone: () async {
@@ -285,11 +345,15 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
             await _streamManager.completeStream(streamId);
           }
 
-          if (mounted) {
-            setState(() {
-              _isStreaming = false;
+          if (mounted) setState(() => _isStreaming = false);
+
+          // Final scroll after stream ends
+          if (_autoScroll) {
+            SchedulerBinding.instance.addPostFrameCallback((_) {
+              if (_autoScroll && mounted) _scrollToBottom();
             });
           }
+
           _currentStreamSubscription = null;
           _currentStreamId = null;
         },
@@ -303,14 +367,13 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
   }
 }
 
+// ─── Composer Widget ─────────────────────────────────────────────────────────
+
 class _Composer extends StatefulWidget {
   final bool isStreaming;
   final VoidCallback? onStop;
 
-  const _Composer({
-    this.isStreaming = false,
-    this.onStop,
-  });
+  const _Composer({this.isStreaming = false, this.onStop});
 
   @override
   State<_Composer> createState() => _ComposerState();
@@ -377,8 +440,9 @@ class _ComposerState extends State<_Composer> {
           child: Column(
             children: [
               Padding(
-                padding: EdgeInsets.only(bottom: bottomSafeArea)
-                    .add(const EdgeInsets.all(8.0)),
+                padding: EdgeInsets.only(
+                  bottom: bottomSafeArea,
+                ).add(const EdgeInsets.all(8.0)),
                 child: Row(
                   children: [
                     if (onAttachmentTap != null)
@@ -400,12 +464,12 @@ class _ComposerState extends State<_Composer> {
                           ),
                           border: const OutlineInputBorder(
                             borderSide: BorderSide.none,
-                            borderRadius:
-                                BorderRadius.all(Radius.circular(24)),
+                            borderRadius: BorderRadius.all(Radius.circular(24)),
                           ),
                           filled: true,
-                          fillColor: theme.surfaceContainerHigh
-                              .withValues(alpha: 0.8),
+                          fillColor: theme.surfaceContainerHigh.withValues(
+                            alpha: 0.8,
+                          ),
                           hoverColor: Colors.transparent,
                         ),
                         style: theme.bodyMedium.copyWith(
