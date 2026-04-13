@@ -45,7 +45,12 @@
 
 ## Screen Recordings
 
-* Scenario 1 (Basic Auto-Scroll): Watch Recording
-* Scenario 2 (Pause on Manual Scroll): Watch Recording
-* Scenario 3 (Send While Scrolled Up): Watch Recording
-* Scenario 4 (Resume Auto-Scroll After Scroll Down): Watch Recording
+All four scenarios are demonstrated in a single recording:
+
+* [Watch Full Demo Recording](https://drive.google.com/drive/folders/1g7-HvXIET2rv_tvDSK6TjOfD5VpQIYfP)
+
+The recording covers:
+- Scenario 1 (Basic Auto-Scroll): AI response streams in and screen auto-scrolls to bottom
+- Scenario 2 (Pause on Manual Scroll): Manual scroll up pauses auto-scroll
+- Scenario 3 (Send While Scrolled Up): Sending a new message jumps back to bottom
+- Scenario 4 (Resume Auto-Scroll After Scroll Down): Scrolling back to bottom resumes auto-scroll
