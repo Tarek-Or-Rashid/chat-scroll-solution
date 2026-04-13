@@ -7,62 +7,45 @@
 3. Run `flutter run` (web, macOS, or any platform)
 4. Enter your API key and start chatting
 
-## Your Task
+## UX Issues Identified and Fixed
 
-This app has scroll UX issues. Compare it against the reference implementation and fix them.
+### Issue 1: No Auto-Scroll During Streaming
+**Problem:** When the AI streamed a response token by token, the chat list did not automatically scroll to the bottom. Users had to manually scroll down to see new content.
 
-**Reference:** https://iman-admin.github.io/chat-scroll-demo/
+**Fix:** Added a `_scrollToBottom()` call inside the stream listener on every incoming token. When `_autoScroll` is `true`, the list animates to `maxScrollExtent` after each frame using `SchedulerBinding.addPostFrameCallback`.
 
-Test these scenarios in the reference demo before you start coding. Start by sending a message that produces a long response to fill the screen (e.g. _"Write a detailed essay about the history of the internet"_). If the response is too short, send another one.
+---
 
-1. Send a message and let the response stream in.
-2. While a response is streaming, scroll up manually.
-3. While scrolled up, send a new message.
-4. While a response is streaming, scroll back down to the bottom.
+### Issue 2: Manual Scroll Did Not Pause Auto-Scroll
+**Problem:** When the user scrolled up manually while a response was streaming, the list would jump back to the bottom, making it impossible to read previous messages.
 
-Your solution will be scored primarily on how closely it matches the reference. You are free to use any AI tools you'd like.
----------------
+**Fix:** Added a `ScrollController` listener `_onScroll()` that detects when the user scrolls away from the bottom (more than 32px from `maxScrollExtent`) and sets `_autoScroll = false`, pausing the auto-scroll behavior.
 
-## How to Submit
+---
 
-1. Clone this repo into a **private** repository on your own GitHub account.
-2. Implement your solution.
-3. Deploy your solution to the web.
-4. Update this README with:
-   - The UX issues you identified and fixed.
-   - Your deployed URL.
-   - Include screen recordings for all five scenarios and the deployed URL below.
-5. Add **IMan-admin** as a collaborator to your private repo.
-6. Send us the link to your repo.
----------------
+### Issue 3: Sending a New Message While Scrolled Up Did Not Jump to Bottom
+**Problem:** If the user was scrolled up and sent a new message, the new message and its streaming response were not visible — the list stayed at the old scroll position.
 
-## Required Links to Add Before Submitting
+**Fix:** In `_handleMessageSend()`, `_autoScroll` is reset to `true` and `_scrollToBottom()` is called immediately after inserting the user message, so the view always jumps to the latest content on send.
 
-### Deployed URL
+---
 
-Replace the placeholder below with your live deployed app URL.
+### Issue 4: Scrolling Back to Bottom Did Not Resume Auto-Scroll
+**Problem:** Once the user manually scrolled away, auto-scroll was permanently disabled for that streaming session, even if the user scrolled back to the bottom.
 
-[Live Demo - Replace with your deployed URL](https://your-deployed-url.com)
+**Fix:** The `_onScroll()` listener also detects when the user returns to within 32px of the bottom and sets `_autoScroll = true`, resuming auto-scroll automatically.
 
-### Screen Recordings
-Replace each placeholder below with your submitted recording link.  
-You must submit **all 4 recordings**.
+---
 
+## Deployed URL
 
-- **Scenario 1 (Basic Auto-Scroll):** [Watch Recording - Replace with your Scenario 1 link](https://your-recording-link.com/scenario1)
-- **Scenario 2 (Pause on Manual Scroll):** [Watch Recording - Replace with your Scenario 2 link](https://your-recording-link.com/scenario2)
-- **Scenario 3 (Send While Scrolled Up):** [Watch Recording - Replace with your Scenario 3 link](https://your-recording-link.com/scenario3)
-- **Scenario 4 (Resume Auto-Scroll After Scroll Down):** [Watch Recording - Replace with your Scenario 4 link](https://your-recording-link.com/scenario4)
- 
+🔗 [Live Demo](https://tarek-or-rashid.github.io/chat-scroll-solution/)
 
-## Evaluation Criteria
+---
 
-- Does each scenario work correctly in isolation?
-- Do all four scenarios work together without regressions?
-- Does the behavior match the reference demo?
-- Is the code clean, testable, and well-separated?
----------------
+## Screen Recordings
 
-- ### Company Website
-
-[InterviewMan](https://interviewman.com)
+* Scenario 1 (Basic Auto-Scroll): Watch Recording
+* Scenario 2 (Pause on Manual Scroll): Watch Recording
+* Scenario 3 (Send While Scrolled Up): Watch Recording
+* Scenario 4 (Resume Auto-Scroll After Scroll Down): Watch Recording
